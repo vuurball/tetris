@@ -33,11 +33,14 @@
 		  color: rgb(52, 56, 52);
 		  font-size: 18px;
 		  font-family: fantasy;
-		  padding-left: 5px;
+		  padding: 15px;
       float: right;
       text-align: center;
       display: inline-block;
 		}
+    .sidebar--section {
+      margin-top: 15px;
+    }
 		#field--wrapper {
 		  border: 3px solid rgb(52, 56, 52);
 		  padding: 2px;
@@ -88,16 +91,24 @@
 	    </div>
 
       <div id="board-message">
-        <div>SCORE</div>
+        <div class="sidebar--section">SCORE</div>
         <div>{{ score }}</div>
-        <div>LEVEL</div>
+        <div class="sidebar--section">LEVEL</div>
         <div>{{ level }}</div>
+        <div class="sidebar--section">NEXT</div>
+        <table id="field" style="border-collapse: collapse;">
+          <tr v-for="row in sideBarBoard">
+            <td v-for="col in row">
+              <div class="cell" v-bind:class="{ active: col.isActive }"><div></div></div>
+            </td>
+          </tr>
+        </table>
       </div>
 	  </div>
 	</div>
 
   <script>
-    const shapeIds = ['T','L', 'J', 'O', 'S', 'Z']
+    const shapeIds = ['T','L', 'J', 'O', 'S', 'Z', 'I']
     const shapes = {
       T: {
         states: {
@@ -140,54 +151,48 @@
           1: ['0-2', '1-1', '1-2', '2-1'],
         }
       },
+      I: {
+        states: {
+          0: ['1-0', '1-1', '1-2'],
+          1: ['0-1', '1-1', '2-1'],
+        }
+      },
     }
     const sleep = ms => new Promise(res => setTimeout(res, ms));
 
+    /* 
+     * todos:
+     * check ratotion is possible
+     * add the i shape and make all shapes size 4*4
+     * check if game over
+     */
     Vue.createApp({
       data() {
         return {
           //state
-          boardHeight: 15,
+          boardHeight: 20,
           boardWidth: 10,
           //stats
           // speed: 0, 
           level: 1,
           score: 0,
-          // nextShapeId: 0,
           massage: 'Tetris',
           //utils
           board: [],
+          sideBarBoard: [],
           filledCells: [],
           speedDown: 2000, //ml
           nextTickId: null,
-          activeShape: 0, //? id and state id
+          activeShape: null,
+          nextShape: null,
         }
       },
       created() {
         this.initGameBoard()
         // init first active shape
+        this.setNewActiveShape() //setting 2 shapes initially (this and next)
         this.setNewActiveShape()
         this.renderActiveShape()
-        
-        //temp
-        this.fillCell('14-0', 'isLocked')
-        this.fillCell('14-1', 'isLocked')
-        this.fillCell('14-2', 'isLocked')
-        this.fillCell('14-3', 'isLocked')
-        this.fillCell('13-2', 'isLocked')
-        this.fillCell('12-2', 'isLocked')
-        // this.fillCell('14-8', 'isLocked')
-        // this.fillCell('14-9', 'isLocked')
-        // this.fillCell('13-8', 'isLocked')
-        // this.fillCell('13-0', 'isLocked')
-        // this.fillCell('13-1', 'isLocked')
-        // this.fillCell('13-2', 'isLocked')
-        // this.fillCell('13-6', 'isLocked')
-        // this.fillCell('13-7', 'isLocked')
-        // this.fillCell('13-8', 'isLocked')
-        // this.fillCell('13-9', 'isLocked')
-        // this.fillCell('12-8', 'isLocked')
-
 
         // listen to key presses
         window.addEventListener('keydown', (e) => {
@@ -199,16 +204,24 @@
         this.nextMoveId = setTimeout(this.move, this.speedDown)
       },
       methods: {
-        freeCell(positionKey, content) {
+        freeCell(positionKey, content, board = 'main') {
           const position = positionKey.split('-')
-          if(this.isPositionExist(position[0], position[1])){
-            this.board[position[0]][position[1]][content] = false
+          if (board == 'main') {
+            if (this.isPositionExist(position[0], position[1])){
+              this.board[position[0]][position[1]][content] = false
+            }
+          } else {
+            this.sideBarBoard[position[0]][position[1]][content] = false
           }
         },
-        fillCell(positionKey, content) {
+        fillCell(positionKey, content, board = 'main') {
           const position = positionKey.split('-')
-          if(this.isPositionExist(position[0], position[1])) {
-            this.board[position[0]][position[1]][content] = true
+          if (board == 'main') {
+            if(this.isPositionExist(position[0], position[1])) {
+              this.board[position[0]][position[1]][content] = true
+            }
+          } else {
+            this.sideBarBoard[position[0]][position[1]][content] = true
           }
         },
         isPositionExist(x, y){
@@ -355,6 +368,13 @@
             }
             this.board.push(rowData)
           }
+          for (let x = 0 ; x < 3; x++) {
+            let rowData = []
+            for (let y = 0; y < 3; y++) {
+              rowData.push({ x, y, isActive: false})
+            }
+            this.sideBarBoard.push(rowData)
+          }
         },
         setNewActiveShape() {
           const shapeId = shapeIds[Math.floor(Math.random() * shapeIds.length)]
@@ -362,13 +382,16 @@
           const numOfStates = Object.keys(shape.states).length
           const shapeStateI = Math.floor(Math.random() * numOfStates)
           const shapeState = shape.states[shapeStateI]
-          this.activeShape = { 
+          const newShape = { 
             id: shapeId, 
             stateId: shapeStateI,
             state: shapeState, 
             prevPosition : { bottom: 2, left: 3, right: 5 },
             currentPosition : { bottom: 2, left: 3, right: 5 }
           }
+          this.activeShape = this.nextShape ? this.nextShape : null
+          this.nextShape = newShape
+          this.renderNextShapeSideBar()
         },
         renderActiveShape(samePosition = false) {
           if (this.activeShape.prevPosition != null){
@@ -384,6 +407,20 @@
             for (let y = left, shapeContextY=0; y <= right ; y++, shapeContextY++) {
               if(this.activeShape.state.includes(`${shapeContextX}-${shapeContextY}`)) {
                 this.fillCell(`${x}-${y}`, 'isActive')
+              }
+            }
+          }
+        },
+        renderNextShapeSideBar(samePosition = false) {
+          for (let x = 0 ; x < 3; x++ ) {
+            for (let y = 0; y < 3 ; y++) {
+              this.freeCell(`${x}-${y}`, 'isActive', 'next')
+            }
+          }
+          for (let x = 0; x < 3; x++) {
+            for (let y = 0; y < 3 ; y++) {
+              if(this.nextShape.state.includes(`${x}-${y}`)) {
+                this.fillCell(`${x}-${y}`, 'isActive', 'next')
               }
             }
           }
@@ -404,7 +441,7 @@
               this.deleteRow(x) // drop everything down
               rowWasDeleted = true
               x++ // rerun on the new row state (for multiple lines deletion)
-              this.score += this.score + 100
+              this.score += 100
               let levelCalc = 1 + Number((this.score/1000).toFixed(0))
               if (this.level < levelCalc) {
                 this.level = levelCalc

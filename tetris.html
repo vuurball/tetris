@@ -91,6 +91,7 @@
 	    </div>
 
       <div id="board-message">
+        <div class="sidebar--section">{{ message }}</div>
         <div class="sidebar--section">SCORE</div>
         <div>{{ score }}</div>
         <div class="sidebar--section">LEVEL</div>
@@ -166,7 +167,6 @@
      * todos:
      * check ratotion is possible
      * add the i shape and make all shapes size 4*4
-     * check if game over
      */
     Vue.createApp({
       data() {
@@ -205,32 +205,19 @@
         this.nextMoveId = setTimeout(this.move, this.speedDown)
       },
       methods: {
-        freeCell(positionKey, content, board = 'main') {
-          const position = positionKey.split('-')
+        updateCell(x, y, key, val, board = 'main') {
           if (board == 'main') {
-            if (this.isPositionExist(position[0], position[1])){
-              this.board[position[0]][position[1]][content] = false
+            if (this.isPositionExist(x, y)) {
+              this.board[x][y][key] = val
             }
           } else {
-            this.sideBarBoard[position[0]][position[1]][content] = false
-          }
-        },
-        fillCell(positionKey, content, board = 'main') {
-          const position = positionKey.split('-')
-          if (board == 'main') {
-            if(this.isPositionExist(position[0], position[1])) {
-              this.board[position[0]][position[1]][content] = true
-            }
-          } else {
-            this.sideBarBoard[position[0]][position[1]][content] = true
+            this.sideBarBoard[x][y][key] = val
           }
         },
         isPositionExist(x, y){
           return Boolean(this.board[x] && this.board[x][y])
         },
         async move() {
-          console.log('move')
-
           if (this.canActiveShapeMove('down')) {
             // move active shape down again
             this.setNextShapePosition('down')
@@ -238,14 +225,17 @@
           } else {
             // lock active shape
             let { bottom, left, right } = this.activeShape.currentPosition
-
             for (let x = bottom-2, shapeContextX = 0; x <= bottom; x++, shapeContextX++ ) {
               for (let y = left, shapeContextY=0; y <= right ; y++, shapeContextY++) {
                 if(this.activeShape.state.includes(`${shapeContextX}-${shapeContextY}`)) {
-                  this.freeCell(`${x}-${y}`, 'isActive')
-                  this.fillCell(`${x}-${y}`, 'isLocked')
+                  this.updateCell(x, y, 'isActive', false)
+                  this.updateCell(x, y, 'isLocked', true)
                 }
               }
+            }
+            if (this.activeShape.currentPosition.bottom == 2) {
+              this.message = 'Game Over' // if shape cant move from initial position, then we've hit the top
+              return
             }
             this.setNewActiveShape()
             let lineWasRemoved = await this.removeFilledRows()
@@ -269,10 +259,6 @@
               break
           }
         },
-        isGameOver(currentHeadPositionX, currentHeadPositionY) {
-          //when cant move active shape down and above it less than 3 empty rows
-          return false// Boolean(this.snakeCells.slice(1, this.snakeCells.length).includes(`${currentHeadPositionX}-${currentHeadPositionY}`))
-        },
         canActiveShapeMove(move) {
           // see if active shape touched something
           let { bottom, left, right } = this.activeShape.currentPosition
@@ -280,7 +266,7 @@
           switch (move) {
             case 'down':
               // console.log(JSON.stringify(this.board))
-              for (let y= left ; y<= right; y++){
+              for (let y= left; y <= right; y++){
                 for (let x = bottom; x > bottom -3; x--){
                   if (this.isPositionExist(x, y) && this.board[x][y].isActive){
                     if (x == this.boardHeight-1 || (this.isPositionExist(Number(x)+1, y) && this.board[(Number(x)+1)][y].isLocked)){
@@ -316,7 +302,6 @@
               }
               break
           }
-          
           return true
         },
         getKeyboardEvent(e) {
@@ -339,7 +324,7 @@
             case 'left':
             case 'down':
               // move active shape
-              if (this.canActiveShapeMove(e)) { // todo speed it up till touch any locked cell
+              if (this.canActiveShapeMove(e)) {
                 this.setNextShapePosition(e)
                 this.renderActiveShape()
               }
@@ -354,27 +339,25 @@
               if (true || this.canShapeRotate()) { //todo
                 this.activeShape.stateId = shapeStateI
                 this.activeShape.state = shape.states[shapeStateI]
-                console.log('rotate')
                 this.renderActiveShape(true)
               }
               break
           }
         },
         initGameBoard() {
-          // create the board
+          // create the main board the the preview next shape board
           for (let x = 0 ; x < this.boardHeight; x++) {
-            let rowData = []
+            let rowData = [] , previewRowData = []
             for (let y = 0; y < this.boardWidth; y++) {
               rowData.push({ x, y, isLocked: false, isActive: false})
+              if( x < 3 && y < 3) {
+                previewRowData.push({isActive: false})
+              }
             }
             this.board.push(rowData)
-          }
-          for (let x = 0 ; x < 3; x++) {
-            let rowData = []
-            for (let y = 0; y < 3; y++) {
-              rowData.push({ x, y, isActive: false})
+            if( x < 3) {
+              this.sideBarBoard.push(previewRowData)
             }
-            this.sideBarBoard.push(rowData)
           }
         },
         setNewActiveShape() {
@@ -382,11 +365,10 @@
           const shape = shapes[shapeId]
           const numOfStates = Object.keys(shape.states).length
           const shapeStateI = Math.floor(Math.random() * numOfStates)
-          const shapeState = shape.states[shapeStateI]
           const newShape = { 
             id: shapeId, 
             stateId: shapeStateI,
-            state: shapeState, 
+            state: shape.states[shapeStateI], 
             prevPosition : { bottom: 2, left: 3, right: 5 },
             currentPosition : { bottom: 2, left: 3, right: 5 }
           }
@@ -399,7 +381,7 @@
             let { bottom, left, right } = samePosition ? this.activeShape.currentPosition : this.activeShape.prevPosition
             for (let x = bottom-2 ; x <= bottom; x++ ) {
               for (let y = left; y <= right ; y++) {
-                this.freeCell(`${x}-${y}`, 'isActive')
+                this.updateCell(x, y, 'isActive', false)
               }
             }
           } 
@@ -407,21 +389,17 @@
           for (let x = bottom-2, shapeContextX = 0; x <= bottom; x++, shapeContextX++ ) {
             for (let y = left, shapeContextY=0; y <= right ; y++, shapeContextY++) {
               if(this.activeShape.state.includes(`${shapeContextX}-${shapeContextY}`)) {
-                this.fillCell(`${x}-${y}`, 'isActive')
+                this.updateCell(x, y, 'isActive', true)
               }
             }
           }
         },
         renderNextShapeSideBar(samePosition = false) {
-          for (let x = 0 ; x < 3; x++ ) {
-            for (let y = 0; y < 3 ; y++) {
-              this.freeCell(`${x}-${y}`, 'isActive', 'next')
-            }
-          }
           for (let x = 0; x < 3; x++) {
             for (let y = 0; y < 3 ; y++) {
+              this.updateCell(x, y, 'isActive', false, 'next')
               if(this.nextShape.state.includes(`${x}-${y}`)) {
-                this.fillCell(`${x}-${y}`, 'isActive', 'next')
+                this.updateCell(x, y, 'isActive', true, 'next')
               }
             }
           }
@@ -451,14 +429,12 @@
           return rowWasDeleted
         },
         deleteRow(rowX) {
-          console.log(JSON.stringify(this.board))
-          for (let x = rowX ; x > 0 ; x--) {
+          for (let x = rowX; x > 0; x--) {
             for (let y = 0; y < this.boardWidth; y++) {
               // move upper cell down state
               this.board[x][y].isLocked = this.board[(Number(x)-1)][y].isLocked
             }
           }
-          console.log(JSON.stringify(this.board))
           return
         }
       }

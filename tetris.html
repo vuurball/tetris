@@ -95,6 +95,8 @@
         <div>{{ score }}</div>
         <div class="sidebar--section">LEVEL</div>
         <div>{{ level }}</div>
+        <div class="sidebar--section">SPEED</div>
+        <div>{{ speedDown }}</div>
         <div class="sidebar--section">NEXT</div>
         <table id="field" style="border-collapse: collapse;">
           <tr v-for="row in sideBarBoard">
@@ -173,15 +175,14 @@
           boardHeight: 20,
           boardWidth: 10,
           //stats
-          // speed: 0, 
-          level: 1,
+          level: 0,
           score: 0,
           massage: 'Tetris',
           //utils
           board: [],
           sideBarBoard: [],
           filledCells: [],
-          speedDown: 2000, //ml
+          speedDown: 500, //ml
           nextTickId: null,
           activeShape: null,
           nextShape: null,
@@ -436,18 +437,15 @@
               }
             }
             if (isRowFull) {
-              console.log('row full!!', x)
-              // score++
               this.deleteRow(x) // drop everything down
               rowWasDeleted = true
               x++ // rerun on the new row state (for multiple lines deletion)
               this.score += 100
-              let levelCalc = 1 + Number((this.score/1000).toFixed(0))
-              if (this.level < levelCalc) {
-                this.level = levelCalc
-                this.speedDown -= 100
+              if (this.score % 500 == 0) {
+                this.level += 1
+                this.speedDown -= (this.speedDown > 400 ? 200 : 0)
               }
-              await sleep(this.speedDown) // for rhythmic movement feel
+              await sleep(100) // for rhythmic movement feel
             }
           }
           return rowWasDeleted

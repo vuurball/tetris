@@ -1,0 +1,349 @@
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+	<script src="https://unpkg.com/vue@3"></script>
+
+	<style>
+		body {
+		  background-color: rgb(3, 5, 5);
+		  overflow: hidden;
+		}
+		#screen {
+		  padding: 5px;
+		  border-radius: 7px;
+		  background: linear-gradient(146.06deg, #9aa680 7.61%, #9aa680 79.89%);
+		  position: absolute;
+		}
+		hr {
+		  background-color: #323b1f;
+		  height: 3px;
+		  border-width: 0;
+		  margin: 3px 0px;
+		}
+		#points {
+		  color: rgb(0,0,0);
+		  font-size: 18px;
+		  font-family: fantasy;
+		  float: right;
+		  padding-right: 5px;
+		}
+		#board-message {
+		  color: rgb(52, 56, 52);
+		  font-size: 18px;
+		  font-family: fantasy;
+		  padding-left: 5px;
+		}
+		#field--wrapper {
+		  border: 3px solid rgb(52, 56, 52);
+		  padding: 2px;
+		}
+    .cell {
+      border: 2px solid rgba(95, 102, 86, .2);
+      border-radius: 2px;
+		}
+    .cell div {
+		  width: 6px;
+		  height: 6px;
+      background-color: rgba(95, 102, 86, .2);
+      border: 2px solid #9aa680;
+      border-radius: 2px;
+		}
+    .locked, .active {
+      border: 2px solid black;
+      border-radius: 2px;
+		}
+    .locked div {
+		  width: 6px;
+		  height: 6px;
+      background-color: black;
+      border: 2px solid rgb(95, 102, 86);
+      border-radius: 2px;
+		}
+    .active div {
+		  width: 6px;
+		  height: 6px;
+      background-color: rgba(255, 123, 0, 0.89);
+      border: 2px solid rgb(95, 102, 86);
+      border-radius: 2px;
+		}
+		
+	</style>
+
+	<div id="game">
+	  <div id="screen">
+	    <!-- <div id="points">{{ points }}</div> -->
+	    <div id="board-message">{{ massage }} {{ speedDown }}</div>
+	    <hr />
+	    <div id="field--wrapper">
+	      <table id="field" style="border-collapse: collapse;">
+	        <tr v-for="row in board">
+	          <td v-for="col in row">
+	            <div class="cell" v-bind:class="{ active: col.isActive, locked: col.isLocked }"><div></div></div>
+	          </td>
+	        </tr>
+	      </table>
+	    </div>
+	  </div>
+	</div>
+
+  <script>
+    const shapeIds = ['T', 'L']
+    const shapes = {
+      T: {
+        states: {
+          0: 'T0',
+          1: 'T1',
+          2: 'T2',
+          3: 'T3',
+        }
+      },
+      L: {
+        states: {
+          0: 'L0',
+          1: 'L1',
+          2: 'L2',
+          3: 'L3',
+        }
+      }
+    }
+    const sleep = ms => new Promise(res => setTimeout(res, ms));
+
+    Vue.createApp({
+      data() {
+        return {
+          //state
+          boardHeight: 15,
+          boardWidth: 10,
+          //stats
+          // speed: 0, 
+          level: 0,
+          score: 0,
+          nextShapeId: 0,
+          massage: 'Tetris',
+          //utils
+          board: [],
+          filledCells: [],
+          speedDown: 2000, //ml
+          nextTickId: null,
+          activeShape: 0, //? id and state id
+        }
+      },
+      created() {
+        this.initGameBoard()
+        // init first active shape
+        this.setNewActiveShape()
+        this.renderActiveShape()
+        
+        //temp
+        this.fillCell('14-0', 'isLocked')
+        this.fillCell('14-1', 'isLocked')
+        this.fillCell('14-2', 'isLocked')
+        this.fillCell('14-6', 'isLocked')
+        this.fillCell('14-7', 'isLocked')
+        this.fillCell('14-8', 'isLocked')
+        this.fillCell('14-9', 'isLocked')
+        this.fillCell('13-8', 'isLocked')
+        // this.fillCell('13-0', 'isLocked')
+        // this.fillCell('13-1', 'isLocked')
+        // this.fillCell('13-2', 'isLocked')
+        // this.fillCell('13-6', 'isLocked')
+        // this.fillCell('13-7', 'isLocked')
+        // this.fillCell('13-8', 'isLocked')
+        // this.fillCell('13-9', 'isLocked')
+        // this.fillCell('12-8', 'isLocked')
+
+
+        // listen to key presses
+        window.addEventListener('keydown', (e) => {
+          const evnt = this.getKeyboardEvent(e)
+          this.handleInputEvent(evnt)
+        });
+      },
+      mounted() {
+        this.nextMoveId = setTimeout(this.move, this.speedDown)
+      },
+      methods: {
+        freeCell(positionKey, content) {
+          const position = positionKey.split('-')
+          this.board[position[0]][position[1]][content] = false
+        },
+        fillCell(positionKey, content) {
+          const position = positionKey.split('-')
+          this.board[position[0]][position[1]][content] = true
+        },
+        async move() {
+          console.log('move')
+
+          // if (this.canActiveShapeMove(e)) {
+          // }
+          let bottomReached = false
+          // see if active shape touched something
+          let { bottom, left, right } = this.activeShape.currentPosition
+          if(bottom == this.boardHeight-1) {
+            // bottom of the shape touched something //todo
+            bottomReached = true           
+          }
+
+          if (bottomReached){
+            // lock active shape
+            for (let x = bottom-2 ; x <= bottom; x++ ) {
+              for (let y = left; y <= right ; y++) {
+                this.freeCell(`${x}-${y}`, 'isActive')
+                this.fillCell(`${x}-${y}`, 'isLocked')
+              }
+            }
+            this.setNewActiveShape()
+            let lineWasRemoved = await this.removeFilledRows()
+            this.renderActiveShape()
+          } else {
+            // move active shape down again
+            this.setNextShapePosition('down')
+            this.renderActiveShape()
+          }
+          this.nextMoveId = setTimeout(this.move, this.speedDown)
+        },
+        setNextShapePosition(move) {
+          // get current shape position
+          let { bottom, left, right } = this.activeShape.currentPosition
+          this.activeShape.prevPosition = { bottom, left, right } 
+          switch (move){
+            case 'down':
+              this.activeShape.currentPosition = { bottom: bottom+1, left, right}
+              break
+            case 'right':
+              this.activeShape.currentPosition = { bottom, left:left + 1, right :right+1}
+              break
+            case 'left':
+              this.activeShape.currentPosition = { bottom, left:left - 1, right :right-1}
+              break
+          }
+        },
+        isGameOver(currentHeadPositionX, currentHeadPositionY) {
+          //when cant move active shape down and above it less than 3 empty rows
+          return false// Boolean(this.snakeCells.slice(1, this.snakeCells.length).includes(`${currentHeadPositionX}-${currentHeadPositionY}`))
+        },
+        canActiveShapeMove() {
+          return true
+        },
+        getKeyboardEvent(e) {
+          switch (e.key) {
+            case 'ArrowDown':
+              return 'down'
+            case 'ArrowRight':
+              return 'right'
+            case 'ArrowLeft':
+              return 'left'
+            case ' ':
+              return 'space'
+            default:
+              return ''
+          }
+        },
+        handleInputEvent(e) {
+          console.log(e)
+          switch (e) {
+            case 'right':
+            case 'left':
+            case 'down':
+              // move active shape
+              if (this.canActiveShapeMove(e)) { // todo speed it up till touch any locked cell
+                this.setNextShapePosition(e)
+                this.renderActiveShape()
+              }
+              break
+            case 'space':
+              //rotate
+              // if (this.nextMoveId != null) {
+              //   // pause the game
+              //   this.massage = 'Pause'
+              //   clearTimeout(this.nextMoveId)
+              //   this.nextMoveId = null
+              // } else {
+              //   if (this.massage == 'Game Over') {
+              //     location.reload() // restart the game
+              //   } else {
+              //     // unpause the game
+              //     this.massage = 'Snake'
+              //     this.nextMoveId = setTimeout(this.move, this.speed)
+              //   }
+              // }
+              break
+          }
+        },
+        initGameBoard() {
+          // create the board
+          for (let x = 0 ; x < this.boardHeight; x++) {
+            let rowData = []
+            for (let y = 0; y < this.boardWidth; y++) {
+              rowData.push({ x, y, isLocked: false, isActive: false})
+            }
+            this.board.push(rowData)
+          }
+        },
+        setNewActiveShape() {
+          const shapeId = shapeIds[Math.floor(Math.random() * shapeIds.length)]
+          const shape = shapes[shapeId]
+          const numOfStates = Object.keys(shape.states).length
+          const shapeStateI = shape.states[Math.floor(Math.random() * numOfStates)]
+          this.activeShape = { 
+            id: shapeId, 
+            state: shapeStateI, 
+            prevPosition : { bottom: 2, left: 3, right: 5 },
+            currentPosition : { bottom: 2, left: 3, right: 5 }
+          }
+        },
+        renderActiveShape() {
+          if (this.activeShape.prevPosition != null){
+            let { bottom, left, right } = this.activeShape.prevPosition
+            for (let x = bottom-2 ; x <= bottom; x++ ) {
+              for (let y = left; y <= right ; y++) {
+                this.freeCell(`${x}-${y}`, 'isActive')
+              }
+            }
+          } 
+          let { bottom, left, right } = this.activeShape.currentPosition
+          for (let x = bottom-2 ; x <= bottom; x++ ) {
+            for (let y = left; y <= right ; y++) {
+              this.fillCell(`${x}-${y}`, 'isActive')
+            }
+          }
+        },
+        async removeFilledRows  () {
+          let rowWasDeleted = false
+          for (let x = this.boardHeight -1 ; x > 0 ; x--) {
+            let isRowFull = true
+            for (let y = 0; y < this.boardWidth; y++) {
+              if (!this.board[x][y].isLocked) {
+                isRowFull = false
+                break
+              }
+            }
+            if (isRowFull) {
+              console.log('row full!!', x)
+              // score++
+              this.deleteRow(x) // drop everything down
+              rowWasDeleted = true
+              x++ // rerun on the new row state (for multiple lines deletion)
+              await sleep(this.speedDown) // for rhythmic movement feel
+            }
+          }
+          return rowWasDeleted
+        },
+        deleteRow(rowX) {
+          console.log(JSON.stringify(this.board))
+          for (let x = rowX ; x > 0 ; x--) {
+            for (let y = 0; y < this.boardWidth; y++) {
+              // move upper cell down state
+              this.board[x][y].isLocked = this.board[(Number(x)-1)][y].isLocked
+            }
+          }
+          console.log(JSON.stringify(this.board))
+          return
+        }
+      }
+	}).mount('#game')
+	</script>
+</body>
+</html>
